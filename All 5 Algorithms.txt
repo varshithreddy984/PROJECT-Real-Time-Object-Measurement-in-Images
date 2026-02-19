@@ -1,0 +1,521 @@
+                             SVM Algorithm
+
+from google.colab.patches import cv2_imshow
+import cv2
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import os
+import tensorflow as tf
+import tensorflow_hub as hub
+
+# Load Faster R-CNN model
+object_detection_model_url = "https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1"
+object_detection_model = hub.load(object_detection_model_url)
+
+# Load SVM model
+svm_classifier = SVC(kernel='linear', random_state=42)
+
+# Input and output folders
+input_folder = "/content/drive/MyDrive/Object Measurement (1)"
+output_folder = "/content/drive/MyDrive/Output Folder 3"
+os.makedirs(output_folder, exist_ok=True)
+
+# Create a text file to store measurements
+measurements_file_path = "/content/drive/MyDrive/test 3.txt"
+measurements_file = open(measurements_file_path, "w")
+
+# Prepare data for image classification
+data = []
+labels = []
+
+# Process each image in the input folder
+for filename in os.listdir(input_folder):
+    # Construct the path to the image
+    image_path = os.path.join(input_folder, filename)
+
+    # Load the image
+    frame = cv2.imread(image_path)
+
+    # Check if the image is loaded successfully
+    if frame is None:
+        print(f"Error loading image: {image_path}")
+        continue
+
+    # Convert the frame to grayscale (assuming features are extracted from grayscale images)
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Extract features (for simplicity, using the average pixel intensity as a feature)
+    features = np.mean(gray_frame)
+
+    # Classify based on some condition (e.g., average pixel intensity threshold)
+    label = "Class_A" if features > 100 else "Class_B"
+
+    # Display class label and measurement
+    measurement = f"Average Pixel Intensity: {features:.2f}"
+    print(f"Image: {filename}, {measurement}")
+
+    # Write measurements to the text file
+    measurements_file.write(f"Image: {filename}, {measurement}\n")
+
+    # Append data for classification
+    data.append(features)
+    labels.append(label)
+
+    # Object Detection using Faster R-CNN
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    input_tensor = tf.image.resize(rgb_frame, (640, 640))
+    input_tensor = tf.cast(input_tensor, dtype=tf.uint8)  # Convert to uint8
+    input_tensor = tf.expand_dims(input_tensor, axis=0)
+    detection_results = object_detection_model(input_tensor)
+
+    # Process detections
+    boxes = detection_results['detection_boxes'][0].numpy()
+    scores = detection_results['detection_scores'][0].numpy()
+    classes = detection_results['detection_classes'][0].numpy().astype(int)
+
+    # Display detections on the image
+    for i in range(len(boxes)):
+        if scores[i] > 0.5:  # Confidence threshold
+            box = boxes[i]
+            class_id = classes[i]
+
+            ymin, xmin, ymax, xmax = box
+            xmin, xmax, ymin, ymax = int(xmin * frame.shape[1]), int(xmax * frame.shape[1]), \
+                                     int(ymin * frame.shape[0]), int(ymax * frame.shape[0])
+
+            # Draw bounding box
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+
+            # Display class label and confidence score
+            label = f"Class {class_id} - Score: {scores[i]:.2f}"
+            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Write measurements to the text file
+            measurements_file.write(f"Image: {filename}, {label}\n")
+
+    # Save the annotated image to the output folder
+    output_path = os.path.join(output_folder, f"detection_output_{filename}")
+    cv2.imwrite(output_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+# Close the measurements file
+measurements_file.close()
+
+# Convert labels to numerical format
+label_encoder = LabelEncoder()
+labels_encoded = label_encoder.fit_transform(labels)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(data, labels_encoded, test_size=0.2, random_state=42)
+
+# Train SVM
+svm_classifier.fit(np.array(X_train).reshape(-1, 1), y_train)
+
+# Predict on the test set
+y_pred_svm = svm_classifier.predict(np.array(X_test).reshape(-1, 1))
+
+# Evaluate the accuracy for SVM
+accuracy_svm = accuracy_score(y_test, y_pred_svm)
+print(f"SVM Accuracy: {accuracy_svm:.2f}")
+
+
+
+
+
+                   Random Forest Algorithm
+
+from google.colab.patches import cv2_imshow
+import cv2
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder  # Add the import
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import os
+import tensorflow as tf
+import tensorflow_hub as hub
+
+# Load Faster R-CNN model
+object_detection_model_url = "https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1"
+object_detection_model = hub.load(object_detection_model_url)
+
+# Load Random Forest model
+rf_classifier = RandomForestClassifier(random_state=42)
+
+# Input and output folders
+input_folder = "/content/drive/MyDrive/Object Measurement"
+output_folder = "/content/drive/MyDrive/Output Folder 4"
+os.makedirs(output_folder, exist_ok=True)
+
+# Create a text file to store measurements
+measurements_file_path = "/content/drive/MyDrive/test 4.txt"
+measurements_file = open(measurements_file_path, "w")
+
+# Prepare data for image classification
+data = []
+labels = []
+
+# Process each image in the input folder
+for filename in os.listdir(input_folder):
+    # Construct the path to the image
+    image_path = os.path.join(input_folder, filename)
+
+    # Load the image
+    frame = cv2.imread(image_path)
+
+    # Check if the image is loaded successfully
+    if frame is None:
+        print(f"Error loading image: {image_path}")
+        continue
+
+    # Convert the frame to grayscale (assuming features are extracted from grayscale images)
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Extract features (for simplicity, using the average pixel intensity as a feature)
+    features = np.mean(gray_frame)
+
+    # Classify based on some condition (e.g., average pixel intensity threshold)
+    label = "Class_A" if features > 100 else "Class_B"
+
+    # Display class label and measurement
+    measurement = f"Average Pixel Intensity: {features:.2f}"
+    print(f"Image: {filename}, {measurement}")
+
+    # Write measurements to the text file
+    measurements_file.write(f"Image: {filename}, {measurement}\n")
+
+    # Append data for classification
+    data.append(features)
+    labels.append(label)
+
+    # Object Detection using Faster R-CNN
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    input_tensor = tf.image.resize(rgb_frame, (640, 640))
+    input_tensor = tf.cast(input_tensor, dtype=tf.uint8)  # Convert to uint8
+    input_tensor = tf.expand_dims(input_tensor, axis=0)
+    detection_results = object_detection_model(input_tensor)
+
+    # Process detections
+    boxes = detection_results['detection_boxes'][0].numpy()
+    scores = detection_results['detection_scores'][0].numpy()
+    classes = detection_results['detection_classes'][0].numpy().astype(int)
+
+    # Display detections on the image
+    for i in range(len(boxes)):
+        if scores[i] > 0.5:  # Confidence threshold
+            box = boxes[i]
+            class_id = classes[i]
+
+            ymin, xmin, ymax, xmax = box
+            xmin, xmax, ymin, ymax = int(xmin * frame.shape[1]), int(xmax * frame.shape[1]), \
+                                     int(ymin * frame.shape[0]), int(ymax * frame.shape[0])
+
+            # Draw bounding box in red color
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 0, 255), 2)
+
+            # Display class label and confidence score
+            label = f"Class {class_id} - Score: {scores[i]:.2f}"
+            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+            # Write measurements to the text file
+            measurements_file.write(f"Image: {filename}, {label}\n")
+
+    # Save the annotated image to the output folder
+    output_path = os.path.join(output_folder, f"detection_output_{filename}")
+    cv2.imwrite(output_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+# Close the measurements file
+measurements_file.close()
+
+# Convert labels to numerical format
+label_encoder = LabelEncoder()
+labels_encoded = label_encoder.fit_transform(labels)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(data, labels_encoded, test_size=0.2, random_state=42)
+
+# Train Random Forest
+rf_classifier.fit(np.array(X_train).reshape(-1, 1), y_train)
+
+# Predict on the test set
+y_pred_rf = rf_classifier.predict(np.array(X_test).reshape(-1, 1))
+
+# Evaluate the accuracy for Random Forest
+accuracy_rf = accuracy_score(y_test, y_pred_rf)
+print(f"Random Forest Accuracy: {accuracy_rf:.2f}")
+
+
+
+
+          SSD (Single Short Multi box Detector) Algorithm
+
+from google.colab.patches import cv2_imshow
+import cv2
+import numpy as np
+import tensorflow as tf
+import tensorflow_hub as hub
+import os
+
+# Load MobileNet SSD model
+model_url = "https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2"
+model = hub.load(model_url)
+
+# Input and output folders
+input_folder = "/content/drive/MyDrive/Object Measurement"
+output_folder = "/content/drive/MyDrive/Output folder"
+os.makedirs(output_folder, exist_ok=True)
+
+# Create a text file to store measurements
+measurements_file_path = "/content/drive/MyDrive/test.txt"
+measurements_file = open(measurements_file_path, "w")
+
+# Process each image in the input folder
+for filename in os.listdir(input_folder):
+    # Construct the path to the image
+    image_path = os.path.join(input_folder, filename)
+
+    # Load the image
+    frame = cv2.imread(image_path)
+
+    # Check if the image is loaded successfully
+    if frame is None:
+        print(f"Error loading image: {image_path}")
+        continue
+
+    # Convert the frame to RGB
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Resize the image to fit the model input size
+    input_tensor = tf.image.resize(rgb_frame, (300, 300))
+    input_tensor = tf.cast(input_tensor, dtype=tf.uint8)  # Convert to uint8
+    input_tensor = tf.expand_dims(input_tensor, axis=0)
+
+    # Perform inference
+    detection_results = model(input_tensor)
+
+    # Process detections
+    boxes = detection_results['detection_boxes'][0].numpy()
+    scores = detection_results['detection_scores'][0].numpy()
+    classes = detection_results['detection_classes'][0].numpy().astype(int)
+
+    # Display detections on the image
+    for i in range(len(boxes)):
+        if scores[i] > 0.5:  # Confidence threshold
+            box = boxes[i]
+            class_id = classes[i]
+
+            ymin, xmin, ymax, xmax = box
+            xmin, xmax, ymin, ymax = int(xmin * frame.shape[1]), int(xmax * frame.shape[1]), \
+                                     int(ymin * frame.shape[0]), int(ymax * frame.shape[0])
+
+            # Draw bounding box
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+
+            # Display class label, confidence score, and measurement
+            label = f"Class {class_id} - Score: {scores[i]:.2f}"
+            measurement = f"Width: {xmax - xmin}, Height: {ymax - ymin}"
+            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(frame, measurement, (xmin, ymin + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Write measurements to the text file
+            measurements_file.write(f"Image: {filename}, {measurement}\n")
+
+    # Save the annotated image to the output folder
+    output_path = os.path.join(output_folder, f"detection_output_{filename}")
+    cv2.imwrite(output_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+# Close the measurements file
+measurements_file.close()
+
+# Display the saved output images
+output_images = [os.path.join(output_folder, f) for f in os.listdir(output_folder)]
+for output_image in output_images:
+    img = cv2.imread(output_image)
+    cv2_imshow(img)
+
+# Print a message indicating that measurements are saved to the text file
+print(f"Measurements saved to: {measurements_file_path}")
+
+
+
+                 EfficientDet Algorithm
+
+from google.colab.patches import cv2_imshow
+import cv2
+import numpy as np
+import tensorflow as tf
+import tensorflow_hub as hub
+import os
+
+# Load EfficientDet model
+model_url = "https://tfhub.dev/tensorflow/efficientdet/d7/1"
+model = hub.load(model_url)
+
+# Input and output folders
+input_folder = "/content/drive/MyDrive/Object Measurement"
+output_folder = "/content/drive/MyDrive/Output folder 2"
+os.makedirs(output_folder, exist_ok=True)
+
+# Create a text file to store measurements
+measurements_file_path = "/content/drive/MyDrive/test 1.txt"
+measurements_file = open(measurements_file_path, "w")
+
+# Process each image in the input folder
+for filename in os.listdir(input_folder):
+    # Construct the path to the image
+    image_path = os.path.join(input_folder, filename)
+
+    # Load the image
+    frame = cv2.imread(image_path)
+
+    # Check if the image is loaded successfully
+    if frame is None:
+        print(f"Error loading image: {image_path}")
+        continue
+
+    # Convert the frame to RGB
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Resize the image to fit the model input size
+    input_tensor = tf.image.resize(rgb_frame, (640, 640))
+    input_tensor = tf.cast(input_tensor, dtype=tf.uint8)  # Convert to uint8
+    input_tensor = tf.expand_dims(input_tensor, axis=0)
+
+    # Perform EfficientDet inference
+    detection_results = model(input_tensor)
+
+    # Process detections
+    boxes = detection_results['detection_boxes'][0].numpy()
+    scores = detection_results['detection_scores'][0].numpy()
+    classes = detection_results['detection_classes'][0].numpy().astype(int)
+
+    # Display detections on the image
+    for i in range(len(boxes)):
+        if scores[i] > 0.5:  # Confidence threshold
+            box = boxes[i]
+            class_id = classes[i]
+
+            ymin, xmin, ymax, xmax = box
+            xmin, xmax, ymin, ymax = int(xmin * frame.shape[1]), int(xmax * frame.shape[1]), \
+                                     int(ymin * frame.shape[0]), int(ymax * frame.shape[0])
+
+            # Draw bounding box
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+
+            # Display class label, confidence score, and measurement
+            label = f"Class {class_id} - Score: {scores[i]:.2f}"
+            measurement = f"Width: {xmax - xmin}, Height: {ymax - ymin}"
+            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(frame, measurement, (xmin, ymin + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Write measurements to the text file
+            measurements_file.write(f"Image: {filename}, {measurement}\n")
+
+    # Save the annotated image to the output folder
+    output_path = os.path.join(output_folder, f"detection_output_{filename}")
+    cv2.imwrite(output_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+# Close the measurements file
+measurements_file.close()
+
+
+
+                         RCNN Algorithm
+
+
+from google.colab.patches import cv2_imshow
+import cv2
+import numpy as np
+import tensorflow as tf
+import tensorflow_hub as hub
+import os
+
+# Load Faster R-CNN model
+model_url = "https://tfhub.dev/tensorflow/faster_rcnn/inception_resnet_v2_640x640/1"
+model = hub.load(model_url)
+
+# Input and output folders
+input_folder = "/content/drive/MyDrive/Object Measurement"
+output_folder = "/content/drive/MyDrive/Output Folder 1"
+os.makedirs(output_folder, exist_ok=True)
+
+# Create a text file to store measurements
+measurements_file_path = "/content/drive/MyDrive/test.txt"
+measurements_file = open(measurements_file_path, "w")
+
+# Process each image in the input folder
+for filename in os.listdir(input_folder):
+    # Construct the path to the image
+    image_path = os.path.join(input_folder, filename)
+
+    # Load the image
+    frame = cv2.imread(image_path)
+
+    # Check if the image is loaded successfully
+    if frame is None:
+        print(f"Error loading image: {image_path}")
+        continue
+
+    # Convert the frame to RGB
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # Resize the image to fit the model input size
+    resized_frame = tf.image.resize(rgb_frame, (640, 640))
+    
+    # Convert to tf.uint8 and normalize pixel values to [0, 255]
+    input_tensor = tf.cast(resized_frame, dtype=tf.uint8)
+
+    input_tensor = tf.expand_dims(input_tensor, axis=0)
+
+    # Perform Faster R-CNN inference
+    detection_results = model(input_tensor)
+
+    # Rest of your code remains unchanged...
+    # (processing detections, drawing bounding boxes, saving images, etc.)
+    # Process detections
+    boxes = detection_results['detection_boxes'][0].numpy()
+    scores = detection_results['detection_scores'][0].numpy()
+    classes = detection_results['detection_classes'][0].numpy().astype(int)
+
+    # Display detections on the image
+    for i in range(len(boxes)):
+        if scores[i] > 0.5:  # Confidence threshold
+            box = boxes[i]
+            class_id = classes[i]
+
+            ymin, xmin, ymax, xmax = box
+            xmin, xmax, ymin, ymax = int(xmin * frame.shape[1]), int(xmax * frame.shape[1]), \
+                                     int(ymin * frame.shape[0]), int(ymax * frame.shape[0])
+
+            # Draw bounding box
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+
+            # Display class label, confidence score, and measurement
+            label = f"Class {class_id} - Score: {scores[i]:.2f}"
+            measurement = f"Width: {xmax - xmin}, Height: {ymax - ymin}"
+            cv2.putText(frame, label, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv2.putText(frame, measurement, (xmin, ymin + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Write measurements to the text file
+            measurements_file.write(f"Image: {filename}, {measurement}\n")
+
+    # Save the annotated image to the output folder
+    output_path = os.path.join(output_folder, f"detection_output_{filename}")
+    cv2.imwrite(output_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+
+# Close the measurements file
+measurements_file.close()
+
+# Display the saved output images
+output_images = [os.path.join(output_folder, f) for f in os.listdir(output_folder)]
+for output_image in output_images:
+    img = cv2.imread(output_image)
+    cv2_imshow(img)
+
+# Print a message indicating that measurements are saved to the text file
+print(f"Measurements saved to: {measurements_file_path}")
+R-CNN ALGORITHM
+
+
